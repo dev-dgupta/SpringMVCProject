@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<include resource="org/springframework/boot/logging/logback/defaults.xml" />
+	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+		<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+			<level>DEBUG</level>
+		</filter>
+		<encoder>
+			<pattern>%relative [%thread] %-5level %logger{35} - %msg%n</pattern>
+			<charset>utf8</charset>
+		</encoder>
+	</appender>
+	<!--<appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>@log_file@</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<fileNamePattern>@log_file@.%d{yyyy-MM-dd}.log</fileNamePattern>
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>%relative [%thread] %-5level %logger{35} - %msg%n</pattern>
+		</encoder>
+	</appender>-->
+	<root level="DEBUG">
+		<appender-ref ref="console" />
+	</root>
+	<logger name="com.google" level="DEBUG" />
+	<logger name="org.springframework" level="ERROR" />
+	<logger name="org.apache" level="ERROR" />
+	<logger name="com.magicbricks" level="DEBUG" />
+</configuration>
