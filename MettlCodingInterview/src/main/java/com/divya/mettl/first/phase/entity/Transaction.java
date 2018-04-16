@@ -15,7 +15,7 @@ public class Transaction implements Serializable {
 
     private boolean loyaltyCardUsed;
     private double purchaseAmt;
-    private Date purchaseDate;
+    private String purchaseDate;
     private String transactionId;
     private String custId;
 

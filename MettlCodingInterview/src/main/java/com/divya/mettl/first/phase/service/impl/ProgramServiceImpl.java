@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,7 @@ public class ProgramServiceImpl implements ProgramService {
 
     //    @Override
 //    @HystrixCommand(fallbackMethod = "printEmpty")
+    @ResponseBody
     public List<TransactionBean> print() {
 
         Map<String, Object> userMap = CacheService.getUserCacheMap();
@@ -56,6 +58,7 @@ public class ProgramServiceImpl implements ProgramService {
 
     //    @Override
 //    @HystrixCommand(fallbackMethod = "makeEmptyTransaction")
+    @ResponseBody
     public String makeTransaction(InputBean inputBean) {
 
         if (!validRequest(inputBean))
@@ -66,87 +69,93 @@ public class ProgramServiceImpl implements ProgramService {
             getNewCustomerFields(customer);
         } else {
             List<Transaction> transactions = customer.getTransactionList();
-            double custPurchaseAmt = transactions.get(0).getPurchaseAmt();
+            double custPurchaseAmt = 0.0D;
+            for (Transaction transaction : transactions) {
+                custPurchaseAmt = transaction.getPurchaseAmt() + custPurchaseAmt;
+            }
+            int goldMinPurchase = Integer.parseInt(env.getProperty("gold.class.cust.min.purchase"));
+            int silverMinPurchase = Integer.parseInt(env.getProperty("silver.class.cust.min.purchase"));
             if (CacheService.foundInUserCacheMap(inputBean.getLoyaltyCardNum())) {
                 Customer customerFoundInMap = (Customer) CacheService.getFromUserCacheMap(customer.getLoyaltyCard().getCardNum());
                 double custTotalPurchase = customerFoundInMap.getTotalPurchaseMade() + custPurchaseAmt;
-                getLoyaltyCustomerFields(customer, customerFoundInMap, custPurchaseAmt, custTotalPurchase);
+                switch (Constants.ProgramClass.getProgramClassFromVal(customerFoundInMap.getCustClass())) {
+                    case GOLD_CLASS:
+                        getGoldClassCustomerFields(customer, customerFoundInMap.getCustLoyaltyPoints(), custPurchaseAmt, custTotalPurchase, goldMinPurchase);
+                        break;
+                    case SILVER_CLASS:
+                        getSilverClassCustomerFields(customer, customerFoundInMap.getCustLoyaltyPoints(), custPurchaseAmt, custTotalPurchase, silverMinPurchase);
+                        break;
+                    case NORMAL_CLASS:
+                        customer.setCustClass(Constants.ProgramClass.NORMAL_CLASS.getVal());
+                        setAllCustPoints(customer, custPurchaseAmt, customerFoundInMap.getCustLoyaltyPoints());
+                        break;
+                    default:
+                        break;
+                }
+                customer.setTotalPurchaseMade(custTotalPurchase);
+                customer.setEnrolled(true);
                 transactions.addAll(customerFoundInMap.getTransactionList());
                 customer.setTransactionList(transactions);
             } else {
                 customer.setEnrolled(true);
                 customer.setTotalPurchaseMade(custPurchaseAmt);
                 customer.setCustLoyaltyPoints(Integer.parseInt(env.getProperty("new.cust.point")));
+                if (custPurchaseAmt > goldMinPurchase) {
+                    getGoldClassCustomerFields(customer, customer.getCustLoyaltyPoints(), custPurchaseAmt, 0, goldMinPurchase);
+                } else if (custPurchaseAmt <= goldMinPurchase && custPurchaseAmt > silverMinPurchase) {
+                    getSilverClassCustomerFields(customer, customer.getCustLoyaltyPoints(), custPurchaseAmt, 0, silverMinPurchase);
+                } else {
+                    customer.setCustClass(Constants.ProgramClass.NORMAL_CLASS.getVal());
+                }
             }
         }
-        CacheService.putInUserCacheMap(customer.getLoyaltyCard().getCardNum(), customer);
+        // saving only those customers who have a loyalty card
+        if (null != customer.getLoyaltyCard())
+            CacheService.putInUserCacheMap(customer.getLoyaltyCard().getCardNum(), customer);
         return "Transaction successful!";
     }
 
-    private void getLoyaltyCustomerFields(Customer customer, Customer customerFoundInMap, double custPurchaseAmt, double custTotalPurchase) {
-        switch (Constants.ProgramClass.getProgramClassFromVal(customerFoundInMap.getCustClass())) {
-            case GOLD_CLASS:
-                getGoldClassCustomerFields(customer, customerFoundInMap, custPurchaseAmt, custTotalPurchase);
-                break;
-            case SILVER_CLASS:
-                getSilverClassCustomerFields(customer, customerFoundInMap, custPurchaseAmt, custTotalPurchase);
-                break;
-            case NORMAL_CLASS:
-                double allCustPoint = Integer.parseInt(env.getProperty("all.cust.point"));
-                customer.setCustLoyaltyPoints((int) (customerFoundInMap.getCustLoyaltyPoints() + (custPurchaseAmt * allCustPoint)));
-                break;
-            default:
-                break;
-
-        }
-        customer.setTotalPurchaseMade(custTotalPurchase);
-        customer.setEnrolled(true);
+    private void setAllCustPoints(Customer customer, double custPurchaseAmt, int origLoyaltyPoints) {
+        double allCustPoint = Double.parseDouble(env.getProperty("all.cust.point"));
+        customer.setCustLoyaltyPoints((int) (origLoyaltyPoints + (custPurchaseAmt * allCustPoint)));
     }
 
-    private void getGoldClassCustomerFields(Customer customer, Customer customerFoundInMap, double custPurchaseAmt, double custTotalPurchase) {
-        int minPurchase = 0;
-        int totalSpent = 0;
-        int pointsAdded = 0;
-        double totalLoyaltyPointsToBeAdded = 0.0D;
-        minPurchase = Integer.parseInt(env.getProperty("gold.class.cust.min.purchase"));
-        totalSpent = Integer.parseInt(env.getProperty("gold.class.total.spent.for.point"));
-        pointsAdded = Integer.parseInt(env.getProperty("gold.class.point"));
+    private void getGoldClassCustomerFields(Customer customer, int origCustLoyaltyPoints, double custPurchaseAmt, double custTotalPurchase, int minPurchase) {
+        int totalSpent = Integer.parseInt(env.getProperty("gold.class.total.spent.for.point"));
+        int pointsAdded = Integer.parseInt(env.getProperty("gold.class.point"));
+
+        customer.setCustClass(Constants.ProgramClass.GOLD_CLASS.getVal());
         if (custTotalPurchase > minPurchase) {
-            customer.setCustClass(Constants.ProgramClass.GOLD_CLASS.getVal());
-            if (custTotalPurchase - minPurchase > custPurchaseAmt) {
-                totalLoyaltyPointsToBeAdded = (totalSpent / pointsAdded) * (custPurchaseAmt);
-            } else {
-                totalLoyaltyPointsToBeAdded = (totalSpent / pointsAdded) * (custTotalPurchase - minPurchase);
-            }
-            customer.setCustLoyaltyPoints((int) (customerFoundInMap.getCustLoyaltyPoints() + totalLoyaltyPointsToBeAdded));
+            getCustomerClass(customer, origCustLoyaltyPoints, custPurchaseAmt, custTotalPurchase, minPurchase, totalSpent, pointsAdded);
         } else {
-            customer.setCustLoyaltyPoints(customerFoundInMap.getCustLoyaltyPoints() + Integer.parseInt(env.getProperty("all.cust.point")));
+            setAllCustPoints(customer, custPurchaseAmt, origCustLoyaltyPoints);
         }
     }
 
-    private void getSilverClassCustomerFields(Customer customer, Customer customerFoundInMap, double custPurchaseAmt, double custTotalPurchase) {
-        int minPurchase = 0;
-        int totalSpent = 0;
-        int pointsAdded = 0;
-        double totalLoyaltyPointsToBeAdded = 0.0D;
-        minPurchase = Integer.parseInt(env.getProperty("silver.class.cust.min.purchase"));
-        totalSpent = Integer.parseInt(env.getProperty("silver.class.total.spent.for.point"));
-        pointsAdded = Integer.parseInt(env.getProperty("silver.class.point"));
-        if (custTotalPurchase > minPurchase) {
-            customer.setCustClass(Constants.ProgramClass.SILVER_CLASS.getVal());
-            if (custTotalPurchase - minPurchase > custPurchaseAmt) {
-                totalLoyaltyPointsToBeAdded = (totalSpent / pointsAdded) * (custPurchaseAmt);
-            } else {
-                totalLoyaltyPointsToBeAdded = (totalSpent / pointsAdded) * (custTotalPurchase - minPurchase);
-            }
-            customer.setCustLoyaltyPoints((int) (customerFoundInMap.getCustLoyaltyPoints() + totalLoyaltyPointsToBeAdded));
+    private void getCustomerClass(Customer customer, int origCustLoyaltyPoints, double custPurchaseAmt, double custTotalPurchase, int minPurchase, int totalSpent, int pointsAdded) {
+        double totalLoyaltyPointsToBeAdded;
+
+        if (custTotalPurchase - minPurchase > custPurchaseAmt) {
+            totalLoyaltyPointsToBeAdded = (totalSpent / pointsAdded) * (custPurchaseAmt);
         } else {
-            customer.setCustLoyaltyPoints(customerFoundInMap.getCustLoyaltyPoints() + Integer.parseInt(env.getProperty("all.cust.point")));
+            totalLoyaltyPointsToBeAdded = (totalSpent / pointsAdded) * (custTotalPurchase - minPurchase);
+        }
+        customer.setCustLoyaltyPoints((int) (origCustLoyaltyPoints + totalLoyaltyPointsToBeAdded));
+    }
+
+    private void getSilverClassCustomerFields(Customer customer, int origCustLoyaltyPoints, double custPurchaseAmt, double custTotalPurchase, int minPurchase) {
+        int totalSpent = Integer.parseInt(env.getProperty("silver.class.total.spent.for.point"));
+        int pointsAdded = Integer.parseInt(env.getProperty("silver.class.point"));
+
+        customer.setCustClass(Constants.ProgramClass.SILVER_CLASS.getVal());
+        if (custTotalPurchase > minPurchase) {
+            getCustomerClass(customer, origCustLoyaltyPoints, custPurchaseAmt, custTotalPurchase, minPurchase, totalSpent, pointsAdded);
+        } else {
+            setAllCustPoints(customer, custPurchaseAmt, origCustLoyaltyPoints);
         }
     }
 
     private void getNewCustomerFields(Customer customer) {
-        customer.setActive(true);
         customer.setEnrolled(false);
         customer.setCustLoyaltyPoints(0);
         customer.setTotalPurchaseMade(customer.getTransactionList().get(0).getPurchaseAmt());
@@ -156,9 +165,11 @@ public class ProgramServiceImpl implements ProgramService {
         customer.setCustId(CommonUtility.randomNumber());
         customer.setCustName(inputBean.getCustName());
         customer.setCustEmail(inputBean.getCustEmail());
-        if (inputBean.getLoyaltyCardNum() != null) {
+        customer.setActive(true);
+        if (!CommonUtility.chkNull(inputBean.getLoyaltyCardNum())) {
             LoyaltyCard loyaltyCard = new LoyaltyCard();
             loyaltyCard.setCardNum(inputBean.getLoyaltyCardNum());
+            customer.setLoyaltyCard(loyaltyCard);
         }
         List<Transaction> transactionList = new ArrayList<Transaction>(inputBean.getTransList().size());
         Transaction transaction;

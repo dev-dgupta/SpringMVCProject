@@ -24,11 +24,86 @@ public class ProgramController {
     @Autowired
     ProgramService programService;
 
-    @RequestMapping(value = "/printTansactionList", method = RequestMethod.GET, produces = "application/json")
+
+
+
+    /*
+    API:localhost:6060/mettl/printTransactionList
+
+    Response:
+    [
+    {
+        "custName": "divyaa",
+        "custEmail": "t1122@gmail.com",
+        "custLoyaltyPoints": "646157",
+        "custClass": "GOLD_CLASS",
+        "custTransactions": [
+            {
+                "loyaltyCardUsed": true,
+                "purchaseAmt": 64543431,
+                "purchaseDate": "21-06-2012 11:23",
+                "transactionId": "23423423"
+            },
+            {
+                "loyaltyCardUsed": true,
+                "purchaseAmt": 62310,
+                "purchaseDate": "26-06-2012 11:23",
+                "transactionId": "2348723"
+            }
+        ]
+    },
+    {
+        "custName": "derta",
+        "custEmail": "t12gg@gmail.com",
+        "custLoyaltyPoints": "100",
+        "custClass": "NORMAL_CLASS",
+        "custTransactions": [
+            {
+                "loyaltyCardUsed": true,
+                "purchaseAmt": 61,
+                "purchaseDate": "21-06-2012 11:23",
+                "transactionId": "23423423"
+            },
+            {
+                "loyaltyCardUsed": true,
+                "purchaseAmt": 6690,
+                "purchaseDate": "26-06-2012 11:23",
+                "transactionId": "2348723"
+            }
+        ]
+    }
+]
+
+     */
+    @RequestMapping(value = "/printTransactionList", method = RequestMethod.GET, produces = "application/json")
     public List<TransactionBean> printTransactionList(HttpServletRequest request, HttpServletResponse response) {
         return programService.print();
     }
 
+
+    /*
+    API: localhost:6060/mettl/makeTransaction/
+    POST JSON:
+    {
+  "custName": "divyaa",
+  "custEmail": "t1122@gmail.com",
+  "loyaltyCardNum": "101111",
+  "transList": [
+    {
+      "purchaseAmt": "64543431",
+      "purchaseDate": "21-06-2012 11:23",
+      "transID": "23423423"
+    },
+    {
+      "purchaseAmt": "62310",
+      "purchaseDate": "26-06-2012 11:23",
+      "transID": "2348723"
+    }
+  ]
+}
+
+Response: Transaction Successful!
+     */
     @RequestMapping(value = "/makeTransaction", method = RequestMethod.POST, produces = "application/json")
     public String makeTransaction(@RequestBody InputBean inputBean) {
         return programService.makeTransaction(inputBean);

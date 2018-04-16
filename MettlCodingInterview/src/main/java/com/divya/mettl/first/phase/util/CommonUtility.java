@@ -44,8 +44,8 @@ public class CommonUtility {
     public static int randomNumber() {
         Random random = new Random();
 
-        int min = random.nextInt() + 1;
-        int max = random.nextInt() + 15;
+        int min = random.nextInt(Integer.SIZE - 1) + 1;
+        int max = random.nextInt(Integer.SIZE - 1) + 15;
 
         return random.nextInt((max - min) + 1) + min;
     }

@@ -12,7 +12,7 @@ import java.util.Date;
 public class TransInputBean implements Serializable {
 
     private String purchaseAmt;
-    private Date purchaseDate;
+    private String purchaseDate;
     private String transID;
 
 
